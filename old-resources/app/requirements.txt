@@ -1,0 +1,7 @@
+streamlit
+google-generativeai
+langgraph
+langchain
+langchain-google-genai
+langchain-pinecone
+pinecone-client
