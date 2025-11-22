@@ -40,8 +40,6 @@ wheels/
 Thumbs.db
 
 # Application specific
-app/data/chroma_db/
-app/sessions/
 *.log
 
 # Temporary files

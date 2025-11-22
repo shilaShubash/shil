@@ -26,9 +26,9 @@ class ModelConfig:
 # Currently locked to Gemini Flash 2.5 as per technical design
 AVAILABLE_MODELS = [
     ModelConfig(
-        technical_name="gemini-2.0-flash-exp",
+        technical_name="gemini-2.5-flash",
         provider_api="google",
-        ui_name="Gemini Flash 2.5",
+        ui_name="Gemini 2.5 Flash",
         ui_locked=True
     )
 ]
@@ -42,26 +42,31 @@ class AppConfig:
     """Application-wide configuration."""
 
     # Model settings
-    model_config: ModelConfig = DEFAULT_MODEL
+    model_config: ModelConfig = None
 
     # Google API configuration
     google_api_key: str = os.getenv("GOOGLE_API_KEY", "")
 
     # Embedding model
-    embedding_model: str = "models/embedding-001"  # Gemini Embedding 001
+    embedding_model: str = "models/gemini-embedding-001"  # Gemini Embedding 001
 
     # RAG settings
     top_k_scenarios: int = 2  # Number of scenarios to retrieve
-    chroma_db_path: str = "./app/data/chroma_db"  # ChromaDB persistence directory
+    chroma_db_path: str = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "chroma_db")
     chroma_collection_name: str = "ot_scenarios"
 
     # Session persistence
-    sessions_dir: str = "./app/sessions"  # Session files directory
+    sessions_dir: str = os.path.join(os.path.dirname(os.path.dirname(__file__)), "sessions")
 
     # Phase transition criteria
     critical_fields_count: int = 5  # Must have all 5 critical fields
     additional_fields_count: int = 7  # Plus at least 7 additional fields
     min_total_fields: int = 12  # Total minimum (5 + 7)
+
+    def __post_init__(self):
+        """Set default model config if not provided."""
+        if self.model_config is None:
+            self.model_config = DEFAULT_MODEL
 
     def validate(self) -> bool:
         """Validate configuration."""
