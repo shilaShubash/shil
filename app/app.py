@@ -143,7 +143,7 @@ def render_chat_interface():
 
                     # Handle phase transition
                     if result["phase_changed"]:
-                        st.info("✨ Context gathering complete! Transitioning to mentoring phase...")
+                        st.success("✨ Context gathering complete! Transitioning to mentoring phase...")
                         st.session_state.current_phase = result["phase"]
                         st.session_state.retrieved_scenarios = result["scenarios"]
 
@@ -153,6 +153,9 @@ def render_chat_interface():
                                 st.markdown("I've found similar cases to reference:")
                                 for scenario in result["scenarios"]:
                                     st.markdown(f"- **{scenario['title']}**")
+
+                        # Force UI update
+                        st.rerun()
 
                     # Add to history
                     message_data = {

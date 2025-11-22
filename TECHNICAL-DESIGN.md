@@ -48,7 +48,7 @@ graph TD
 - Utilities: `pypdf2`, `pydantic`, `python-dotenv`
 
 ---
-
+i 
 ## Operational Workflow
 
 ### Phase State Machine

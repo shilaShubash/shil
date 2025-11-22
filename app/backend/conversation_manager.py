@@ -6,6 +6,7 @@ Manages phase transitions, LLM interactions, RAG retrieval, and session persiste
 
 from typing import List, Dict, Any, Literal, Optional
 from datetime import datetime
+from pydantic import BaseModel, Field
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
@@ -25,6 +26,32 @@ from backend.tools import (
 )
 from backend.rag_retriever import ScenarioRetriever
 from backend.session_manager import SessionManager
+
+
+# Pydantic model for structured template extraction
+class TemplateExtraction(BaseModel):
+    """Structured extraction of template fields from conversation."""
+    therapist_role: Optional[str] = Field(None, description="Student / OT / OTA / Aide")
+    years_experience: Optional[str] = Field(None, description="Years of experience")
+    area_specialization: Optional[str] = Field(None, description="Area of specialization")
+    therapist_setting: Optional[str] = Field(None, description="School / Clinic / Hospital / Home / Community")
+
+    patient_age: Optional[str] = Field(None, description="Patient age in years")
+    patient_gender: Optional[str] = Field(None, description="Patient gender")
+    diagnosis: Optional[str] = Field(None, description="Diagnosis or functional description")
+    cultural_background: Optional[str] = Field(None, description="Cultural/ethnic background")
+    marital_status: Optional[str] = Field(None, description="Family structure")
+    educational_framework: Optional[str] = Field(None, description="Kindergarten / School / Post-secondary")
+    occupational_framework: Optional[str] = Field(None, description="Employment status/type")
+    hobbies_leisure: Optional[str] = Field(None, description="Hobbies and leisure activities")
+
+    treatment_setting: Optional[str] = Field(None, description="Where treatment occurs")
+    duration_acquaintance: Optional[str] = Field(None, description="How long therapist has known patient")
+    treatment_type: Optional[str] = Field(None, description="Face-to-face / Online / Hybrid")
+
+    main_difficulty: Optional[str] = Field(None, description="Main difficulty or reason for referral")
+    related_behaviors: Optional[str] = Field(None, description="Observable behaviors/reactions")
+    impact_daily_function: Optional[str] = Field(None, description="Effect on daily routine")
 
 
 Phase = Literal["INTAKE", "MENTORING"]
@@ -54,6 +81,9 @@ class ConversationManager:
             google_api_key=config.google_api_key,
             temperature=0.7
         )
+
+        # Initialize extraction model with structured output
+        self.extraction_model = self.model.with_structured_output(TemplateExtraction)
 
         # Load or initialize state
         self.template = self.session_manager.load_template()
@@ -126,10 +156,8 @@ class ConversationManager:
         scenarios = None
 
         if self.phase == "INTAKE":
-            # Update template (simple extraction from conversation)
-            # Note: In a more sophisticated implementation, we might use an LLM
-            # or structured output to extract template fields. For now, we rely
-            # on the conversation manager to track when enough context is gathered.
+            # Extract template fields from conversation using LLM
+            self._extract_template_fields()
 
             # Check if context is sufficient
             should_transition, status_msg = evaluate_context(self.template)
@@ -149,6 +177,50 @@ class ConversationManager:
             "scenarios": scenarios,
             "template_status": self._get_template_status()
         }
+
+    def _extract_template_fields(self) -> None:
+        """
+        Extract template fields from conversation using structured output.
+
+        Uses LangChain's with_structured_output to reliably extract fields.
+        """
+        try:
+            # Build extraction prompt with recent conversation context
+            extraction_prompt = """Extract all mentioned information from the conversation so far.
+Only include fields that were explicitly stated or clearly implied.
+
+Important:
+- marital_status/family structure can be inferred from parent information (e.g., "father died" = single parent/widowed)
+- diagnosis can include functional descriptions, not just formal diagnoses
+- cultural_background includes ethnicity, religion, and origin
+
+Leave fields as null if not mentioned."""
+
+            # Get all user/assistant messages (exclude system prompts)
+            conversation_msgs = [
+                msg for msg in self.messages
+                if isinstance(msg, (HumanMessage, AIMessage))
+            ]
+
+            # Invoke extraction model with full conversation context
+            extraction_messages = [
+                SystemMessage(content=extraction_prompt)
+            ] + conversation_msgs
+
+            extracted: TemplateExtraction = self.extraction_model.invoke(extraction_messages)
+
+            # Update template with extracted fields (only non-null values)
+            for field, value in extracted.model_dump().items():
+                if value is not None and hasattr(self.template, field):
+                    # Update field (allows corrections/updates)
+                    setattr(self.template, field, value)
+
+            # Save updated template
+            self.session_manager.save_template(self.template)
+
+        except Exception as e:
+            # Log but don't crash - extraction is best-effort
+            print(f"Template extraction error: {e}")
 
     def _execute_phase_transition(self) -> List[Dict[str, Any]]:
         """

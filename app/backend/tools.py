@@ -12,9 +12,9 @@ from dataclasses import dataclass, field
 TEMPLATE_FIELDS = {
     # Therapist Profile
     "therapist_role": {"critical": True, "category": "therapist"},
-    "years_experience": {"critical": True, "category": "therapist"},
+    "years_experience": {"critical": False, "category": "therapist"},
     "area_specialization": {"critical": False, "category": "therapist"},
-    "therapist_setting": {"critical": True, "category": "therapist"},
+    "therapist_setting": {"critical": False, "category": "therapist"},
 
     # Patient Profile
     "patient_age": {"critical": True, "category": "patient"},
@@ -27,14 +27,14 @@ TEMPLATE_FIELDS = {
     "hobbies_leisure": {"critical": False, "category": "patient"},
 
     # Treatment Context
-    "treatment_setting": {"critical": True, "category": "treatment"},
+    "treatment_setting": {"critical": False, "category": "treatment"},
     "duration_acquaintance": {"critical": False, "category": "treatment"},
     "treatment_type": {"critical": False, "category": "treatment"},
 
     # The Dilemma
-    "main_difficulty": {"critical": True, "category": "dilemma"},
+    "main_difficulty": {"critical": False, "category": "dilemma"},
     "related_behaviors": {"critical": False, "category": "dilemma"},
-    "impact_daily_function": {"critical": True, "category": "dilemma"},
+    "impact_daily_function": {"critical": False, "category": "dilemma"},
 }
 
 
