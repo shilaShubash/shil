@@ -30,8 +30,6 @@ def initialize_session_state():
         st.session_state.conversation_manager = None
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
-    if "current_phase" not in st.session_state:
-        st.session_state.current_phase = "INTAKE"
     if "retrieved_scenarios" not in st.session_state:
         st.session_state.retrieved_scenarios = None
 
@@ -56,29 +54,35 @@ def render_sidebar():
             st.code(session_id[:8], language=None)
 
             st.markdown("### Phase")
-            phase = st.session_state.current_phase
+            phase = st.session_state.conversation_manager.phase
             if phase == "INTAKE":
                 st.success("📝 Context Gathering")
             else:
                 st.success("💬 Reflective Mentoring")
 
             # Template status
-            template_status = st.session_state.conversation_manager._get_template_status()
+            from backend.tools import evaluate_context
+            status = evaluate_context(st.session_state.conversation_manager.template)
             st.markdown("### Template Status")
+
+            # Show transition readiness
+            if status['phase'] == 'MENTORING':
+                st.success("✅ Ready for transition")
+
             st.metric(
                 "Fields Filled",
-                f"{template_status['filled_count']}/18"
+                f"{status['filled']}/{status['total']}"
             )
             st.metric(
                 "Critical Fields",
-                f"{template_status['critical_filled']}/11"
+                f"{status['filled_critical']}/{status['total_critical']}"
             )
 
             # Retrieved scenarios
             if st.session_state.retrieved_scenarios:
                 st.markdown("### Retrieved Scenarios")
                 for scenario in st.session_state.retrieved_scenarios:
-                    st.markdown(f"**{scenario['title']}**")
+                    st.markdown(f"**{scenario['id']}: {scenario['title']}**")
                     st.caption(f"Similarity: {scenario['similarity_score']:.2f}")
 
         st.markdown("---")
@@ -87,7 +91,6 @@ def render_sidebar():
         if st.button("🔄 New Session", use_container_width=True):
             st.session_state.conversation_manager = None
             st.session_state.chat_history = []
-            st.session_state.current_phase = "INTAKE"
             st.session_state.retrieved_scenarios = None
             st.rerun()
 
@@ -141,32 +144,17 @@ def render_chat_interface():
                     # Display response
                     st.markdown(result["response"])
 
-                    # Handle phase transition
-                    if result["phase_changed"]:
-                        st.success("✨ Context gathering complete! Transitioning to mentoring phase...")
-                        st.session_state.current_phase = result["phase"]
-                        st.session_state.retrieved_scenarios = result["scenarios"]
-
-                        # Show retrieved scenarios
-                        if result["scenarios"]:
-                            with st.expander("📚 Retrieved Scenarios", expanded=True):
-                                st.markdown("I've found similar cases to reference:")
-                                for scenario in result["scenarios"]:
-                                    st.markdown(f"- **{scenario['title']}**")
-
-                        # Force UI update
-                        st.rerun()
-
                     # Add to history
-                    message_data = {
+                    st.session_state.chat_history.append({
                         "role": "assistant",
                         "content": result["response"]
-                    }
+                    })
 
-                    if result["phase_changed"] and result["scenarios"]:
-                        message_data["scenarios"] = result["scenarios"]
-
-                    st.session_state.chat_history.append(message_data)
+                    # Handle phase transition (scenarios only exist after transitioning to MENTORING)
+                    if result["phase"] == "MENTORING" and result["scenarios"]:
+                        st.session_state.retrieved_scenarios = result["scenarios"]
+                        st.success("✨ Context gathering complete! Transitioning to mentoring phase...")
+                        st.rerun()
 
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
