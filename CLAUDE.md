@@ -24,35 +24,28 @@ MSc thesis project building and evaluating an AI expert mentor system for occupa
 
 ## Current Status
 
-**Phase 1 Complete:** Foundation building, system prompt development, technical design finalized
+**Phase 2 In Progress:** System implementation underway, initial deployment with issues
 
-**Current Tasks:**
-- [ ] Begin Phase 2 implementation
-- [ ] Scenario ingestion script
-- [ ] Conversation manager implementation
+## Current Issues
 
-## notes
+**Issue 1: Retrieved scenarios missing scenario numbers**
+- When scenarios are retrieved and displayed, they show titles but not scenario numbers
+- Expected: "Scenario 03: Dependency & Decision Making"
+- Actual: "Dependency & Decision Making"
+- Location: RAG retrieval system and/or scenario metadata
 
-- the retrieved scenarios are lacking the scenario number
-- when we transition into phase 2, the llm stopped responding. meaning, we answered כדורגל and it didnt continue
-- all of these dont even show:
-  - with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                try:
-                    result = st.session_state.conversation_manager.send_message(user_input)
+**Issue 2: LLM stops responding after phase transition**
+- After transitioning from INTAKE to MENTORING phase, LLM provides one response then stops
+- Example: User answered "כדורגל" (football) and received no follow-up questionyou
+- Expected: LLM should continue with mentoring questions using Professional Reasoning Framework
+- Suspected: Phase 2 system messages may not be correctly added to conversation flow
 
-                    # Display response
-                    st.markdown(result["response"])
-
-                    # Handle phase transition
-                    if result["phase_changed"]:
-                        st.success("✨ Context gathering complete! Transitioning to mentoring phase...")
-                        st.session_state.current_phase = result["phase"]
-                        st.session_state.retrieved_scenarios = result["scenarios"]
-
-                        # Show retrieved scenarios
-                        if result["scenarios"]:
-                            with st.expander("📚 Retrieved Scenarios", expanded=True):
-                                st.markdown("I've found similar cases to reference:")
-                                for scenario in result["scenarios"]:
-                                    st.markdown(f"- **{scenario['title']}**")
+**Issue 3: Phase transition UI elements not displaying**
+- The transition success message and retrieved scenarios expander are not showing in the UI
+- The following code block in app.py (lines 145-156) is not executing/rendering:
+  ```python
+  if result["phase_changed"]:
+      st.success("✨ Context gathering complete! Transitioning to mentoring phase...")
+      # ... scenario display code
+  ```
+- Suspected: Either `phase_changed` is not being set correctly or Streamlit rerun is clearing the UI before it displays
