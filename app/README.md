@@ -168,17 +168,12 @@ Click "🔄 New Session" in the sidebar to reset and start fresh.
 ### Phase Transition Criteria
 
 Transition from INTAKE to MENTORING when:
-- **ALL** of these critical fields are filled:
+- **ALL 5 critical fields** are filled:
   - therapist_role
-  - years_experience
-  - therapist_setting
   - patient_age
   - diagnosis
   - cultural_background
   - marital_status
-  - treatment_setting
-  - main_difficulty
-  - impact_daily_function
 - **AND** at least 7 additional fields are filled
 - **Total minimum**: 12/18 fields
 
@@ -195,11 +190,15 @@ Transition from INTAKE to MENTORING when:
 
 Messages are accumulative:
 1. Start: `[BASE_SYSTEM_PROMPT, PHASE_1_INSTRUCTIONS]`
-2. Phase 1: Add user/assistant messages
-3. Transition: Append `[PHASE_2_INSTRUCTIONS, SCENARIOS, USAGE_INSTRUCTIONS]`
+2. Phase 1: Add user/assistant messages + template extraction (separate LLM call with structured output)
+3. Transition: Append `[PHASE_2_INSTRUCTIONS, RETRIEVED_SCENARIOS]`
 4. Phase 2: Continue conversation with full context
 
-No messages are replaced - full history is preserved.
+Key points:
+- No messages are replaced - full history preserved
+- Template extraction uses Pydantic structured output (automatic after each user message in INTAKE)
+- Phase transition happens AFTER responding to user (next turn gets Phase 2 context)
+- LLM thinking blocks are filtered out with regex before display
 
 ## Configuration
 
@@ -227,6 +226,18 @@ class AppConfig:
     sessions_dir = "./app/sessions"
 ```
 
+## Assumptions
+
+- **Single user sessions**: Each browser session is independent, no multi-user support
+- **Session cleanup**: Sessions are not automatically deleted, clean up `app/sessions/` manually
+- **Language**: System prompts support Hebrew and English, detected automatically from user input
+- **No authentication**: App is open to anyone with the URL (suitable for academic testing)
+- **Local deployment**: Designed for local or simple cloud deployment (Streamlit Community Cloud)
+- **Gemini API**: Requires Google AI API key, no other LLM providers currently supported
+- **Scenario format**: Scenarios must be markdown files in `/scenarios` directory with `scenario-XX.md` naming
+- **Phase transition is one-way**: No rollback from MENTORING to INTAKE phase
+- **Session resumption**: Not currently supported, each session starts fresh
+
 ## Troubleshooting
 
 ### "GOOGLE_API_KEY environment variable not set"
@@ -236,6 +247,23 @@ class AppConfig:
 ### "ChromaDB collection contains 0 documents"
 - Run the ingestion script: `python scripts/ingest_scenarios.py`
 - Verify scenario files exist in `/scenarios` directory
+
+### Recreating ChromaDB from scratch
+
+If you need to rebuild the vector database:
+
+```bash
+# 1. Delete existing database
+rm -rf app/data/chroma_db
+
+# 2. Re-run ingestion
+python scripts/ingest_scenarios.py
+```
+
+This is necessary when:
+- Scenario content has changed
+- Switching embedding models
+- Database corruption occurs
 
 ### "Import error: langchain_chroma"
 - Install dependencies: `pip install -r requirements.txt`
@@ -257,17 +285,15 @@ class AppConfig:
 Edit `backend/prompts.py`:
 - `BASE_SYSTEM_PROMPT`: Core mentor identity and reasoning frameworks
 - `PHASE_1_INSTRUCTIONS`: Context gathering instructions
-- `PHASE_2_INSTRUCTIONS`: Mentoring workflow
-- `SCENARIO_USAGE_INSTRUCTIONS`: How to use retrieved scenarios
+- `PHASE_2_INSTRUCTIONS`: Mentoring workflow with scenario usage instructions
+- `TEMPLATE_EXTRACTION_PROMPT`: Instructions for structured template extraction
 
 ### Adjusting Phase Transition
 
-Modify in `backend/config.py`:
-```python
-critical_fields_count = 5  # Must have all
-additional_fields_count = 7  # Plus at least this many
-min_total_fields = 12  # Total minimum
-```
+Modify logic in `backend/tools.py` (`evaluate_context()` function):
+- Critical fields: 5 required
+- Additional fields: minimum 7 required
+- Total minimum: 12/18 fields
 
 ## Academic Context
 
