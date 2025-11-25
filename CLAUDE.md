@@ -15,6 +15,14 @@ MSc thesis project building and evaluating an AI expert mentor system for occupa
 **scripts/** - Utility scripts
 - calculate-pdf-tokens.py - PDF token estimation utility
 - calculate-scenario-tokens.py - Scenario markdown token estimation utility
+- ingest_scenarios.py - One-time scenario ingestion into ChromaDB
+
+**app/** - Current implementation (Streamlit + LangChain)
+- app.py - Streamlit frontend
+- backend/ - Core logic (conversation_manager, prompts, tools, rag_retriever, session_manager, config)
+- data/chroma_db/ - ChromaDB vector store (created after ingestion)
+- sessions/ - Runtime session files (template.json, conversation.json, retrieved_scenarios.json)
+- README.md - Setup and usage instructions
 
 **Root files:**
 - CLAUDE.md - This file (context and tasks)
@@ -24,28 +32,19 @@ MSc thesis project building and evaluating an AI expert mentor system for occupa
 
 ## Current Status
 
-**Phase 2 In Progress:** System implementation underway, initial deployment with issues
+**Phase 2 In Progress:** System implementation complete with core functionality working
 
-## Current Issues
+**Recent Refactoring (2025-11-25):**
+- Fixed phase transition timing and logic
+- Removed redundant code and temporary message patterns
+- Cleaned up evaluate_context return structure
+- Added LLM thinking process filtering
+- Updated prompts to rely on permanent message history
 
-**Issue 1: Retrieved scenarios missing scenario numbers**
-- When scenarios are retrieved and displayed, they show titles but not scenario numbers
-- Expected: "Scenario 03: Dependency & Decision Making"
-- Actual: "Dependency & Decision Making"
-- Location: RAG retrieval system and/or scenario metadata
+## Known Issues
 
-**Issue 2: LLM stops responding after phase transition**
-- After transitioning from INTAKE to MENTORING phase, LLM provides one response then stops
-- Example: User answered "כדורגל" (football) and received no follow-up questionyou
-- Expected: LLM should continue with mentoring questions using Professional Reasoning Framework
-- Suspected: Phase 2 system messages may not be correctly added to conversation flow
-
-**Issue 3: Phase transition UI elements not displaying**
-- The transition success message and retrieved scenarios expander are not showing in the UI
-- The following code block in app.py (lines 145-156) is not executing/rendering:
-  ```python
-  if result["phase_changed"]:
-      st.success("✨ Context gathering complete! Transitioning to mentoring phase...")
-      # ... scenario display code
-  ```
-- Suspected: Either `phase_changed` is not being set correctly or Streamlit rerun is clearing the UI before it displays
+**Issue 1: Double message rendering**
+- Messages appear twice (grayed out) before disappearing in UI
+- Cause: Messages displayed immediately with st.markdown() AND added to history, then st.rerun() causes duplicate
+- Impact: Visual glitch during message display
+- Status: Pending fix
