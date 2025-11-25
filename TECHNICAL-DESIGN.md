@@ -77,25 +77,30 @@ stateDiagram-v2
    - Create empty template file, conversation log
 
 2. **Phase 1 (INTAKE) Loop:**
-   - User sends message
-   - LLM responds with natural conversation (may call Template Filler tool)
-   - Template Filler updates template → Auto-triggers Context Evaluator
-   - Context Evaluator checks: All 5 critical fields + 7 additional = 12/18 total?
-     - **No:** Continue conversation
-     - **Yes:** Proceed to transition
+   - User sends message → Added to messages
+   - **Extract template fields:** Separate LLM invocation with structured output extracts fields from conversation
+   - **Evaluate context:** Check if All 5 critical fields + 7 additional = 12/18 total
+     - If sufficient: Mark for transition (happens AFTER response)
+   - **Generate response:** LLM responds in INTAKE phase context
+   - **Clean response:** Remove thinking blocks with regex
+   - **Execute transition (if marked):** For NEXT interaction
+     - Generate conversation summary from template fields
+     - Query ChromaDB → Retrieve top-2 scenarios
+     - Add to messages: Phase 2 instructions + Retrieved scenarios
+     - Save retrieved scenarios to file
+     - Set phase = MENTORING
+   - Save conversation state
 
-3. **Phase Transition:**
-   - Generate conversation summary from template + chat history
-   - Embed summary → Query ChromaDB → Retrieve top-2 scenarios
-   - Add to messages: Phase 2 instructions + Retrieved scenarios + Usage instructions
-   - Save retrieved scenarios to file
-   - Notify user: "This resembles Scenario A and Scenario B - let's explore your thinking..."
-   - UI displays scenario titles
+3. **Phase Transition Notification:**
+   - UI displays success message: "✨ Context gathering complete! Transitioning to mentoring phase..."
+   - Sidebar updates to show retrieved scenario IDs and titles
+   - Page reruns to refresh UI
 
 4. **Phase 2 (MENTORING) Loop:**
    - Continue same conversation (all previous messages preserved)
    - LLM follows Professional Reasoning Framework with scenarios as reference
    - One question at a time, no direct solutions
+   - Response cleaning continues
    - Save conversation continuously
 
 5. **Session End:**
@@ -119,29 +124,36 @@ stateDiagram-v2
 }
 ```
 
-### Tools
+### Tools and Functions
 
-Two tools available during INTAKE phase:
+**1. Template Extraction (Automatic)**
+- Uses Pydantic structured output with `with_structured_output()`
+- Extracts template fields from conversation automatically after each user message in INTAKE phase
+- No explicit LLM tool call needed - runs as separate invocation
+- Updates template.json incrementally
+- Implementation: `_extract_template_fields()` in conversation_manager.py
 
-**1. Template Filler**
-- Updates template fields as information is gathered during natural conversation
-- Input: Field updates dictionary
-- Output: Confirmation message with completion status
-- Side effect: Auto-triggers Context Evaluator check
-
-**2. Context Evaluator**
-- Python function (not LLM tool) that checks template completeness
-- Triggered automatically after each Template Filler call
+**2. Context Evaluator (Backend Function)**
+- Python function that checks template completeness
+- Called after template extraction in INTAKE phase
 - Logic: All 5 critical fields filled AND at least 7 additional fields = 12/18 minimum
-- Output: Boolean (triggers phase transition when True)
+- Returns: Dict with `{phase, filled, filled_critical, total, total_critical}`
 - Critical fields: therapist_role, patient_age, diagnosis, cultural_background, marital_status
+- Implementation: `evaluate_context()` in tools.py
 
-**3. RAG Retriever**
-- System function (not exposed to LLM) triggered at phase transition
+**3. RAG Retriever (Backend Function)**
+- System function triggered at phase transition
 - Queries ChromaDB for relevant scenarios
-- Input: Conversation summary generated from template + chat history
-- Returns: Top-K scenarios (K=2)
+- Input: Conversation summary generated from template fields
+- Returns: Top-K scenarios (K=2) with full content
 - Saves retrieved scenarios with metadata (IDs, titles, similarity scores)
+- Implementation: `ScenarioRetriever` in rag_retriever.py
+
+**4. Response Cleaner (Backend Function)**
+- Filters LLM thinking process from responses
+- Uses regex to remove `(Thinking Process: ...)` and `(Internal thoughts: ...)` blocks
+- Prevents internal reasoning from appearing in user-facing responses
+- Implementation: `_clean_response()` in conversation_manager.py
 
 ### LangChain Integration
 
@@ -181,7 +193,6 @@ messages.extend([
 messages.extend([
     SystemMessage(PHASE_2_INSTRUCTIONS),
     SystemMessage(f"Retrieved Scenarios:\n{scenario_text}"),
-    SystemMessage(SCENARIO_USAGE_INSTRUCTIONS),
 ])
 
 # Conversation continues with full context
@@ -192,6 +203,9 @@ messages.extend([
 - Phase-specific instructions added as SystemMessage objects
 - No message replacement - accumulative only
 - Full conversation history preserved across phase transition
+- Phase determined by which instructions exist in message history (not temporary directives)
+- BASE_SYSTEM_PROMPT instructs LLM to watch for Phase 2 instructions and switch behavior
+- PHASE_1_INSTRUCTIONS merged scenario usage instructions into PHASE_2_INSTRUCTIONS
 
 ### ChromaDB Vector Store
 
@@ -509,6 +523,53 @@ Access at `http://localhost:8501`
 - Automatic cleanup
 - No need for session resume
 
+### Phase Transition Timing
+**Decision:** Extract template → Respond in current phase → Transition for next interaction
+
+**Rationale:**
+- User expects response to their INTAKE question in INTAKE context
+- Template must be current before response (extract before)
+- Phase 2 instructions added after response ensures next turn uses new phase
+- Prevents jarring immediate phase switch mid-conversation
+
+### Minimal evaluate_context Return
+**Decision:** Return dict with only `{phase, filled, filled_critical, total, total_critical}`
+
+**Rationale:**
+- Removed redundant data (additional_filled can be derived: filled - filled_critical)
+- Removed human-readable messages (UI formats its own display)
+- Only essential non-derivative data returned
+- Frontend calculates display values as needed
+
+### No Temporary Phase Directives
+**Decision:** Phase determined by permanent SystemMessages in history, not temporary injections
+
+**Rationale:**
+- Temporary messages were leaking into LLM responses ("CURRENT_PHASE: INTAKE" appeared in output)
+- Phase is implicit from which instructions exist in message history
+- BASE_SYSTEM_PROMPT tells LLM to watch for Phase 2 instructions and switch behavior
+- Simpler mental model: phase = what instructions are present
+- Eliminates add/pop pattern complexity
+
+### Response Cleaning
+**Decision:** Regex filter to remove LLM thinking blocks before display
+
+**Rationale:**
+- Gemini model exposes internal reasoning: "(Thinking Process: ...)"
+- This is model behavior, not a prompt issue
+- Users shouldn't see internal reasoning in responses
+- Regex cleaning is simple, reliable solution
+- Patterns: `\(Thinking Process:.*?\)` and `\(Internal thoughts?:.*?\)`
+
+### Consolidated Prompts
+**Decision:** Merged SCENARIO_USAGE_INSTRUCTIONS into PHASE_2_INSTRUCTIONS
+
+**Rationale:**
+- Scenario usage instructions only relevant in Phase 2
+- Having them separate created unnecessary SystemMessage
+- Single Phase 2 instruction block is clearer
+- Reduces message count in context
+
 ---
 
 ## Open Questions
@@ -536,9 +597,9 @@ Access at `http://localhost:8501`
 
 ## Status
 
-**Version:** 1.1 - RAG Strategy Finalized
-**Date:** 2024-11-22
-**Implementation Status:** Design complete, implementation pending
+**Version:** 1.2 - Core Implementation Complete
+**Date:** 2025-11-25
+**Implementation Status:** Functional system with known UI issue
 
 **Decisions Made:**
 - ✅ Model: Gemini Flash 2.5 (locked in UI, programmatically expandable)
@@ -551,13 +612,24 @@ Access at `http://localhost:8501`
 - ✅ Persistence: Incremental saving (crash-resilient)
 - ✅ Conversation: Continuous across phases (no message replacement)
 
+**Implementation Completed:**
+- ✅ Scenario ingestion script with Gemini Embedding 001
+- ✅ Conversation manager with phase transition logic
+- ✅ Template extraction using Pydantic structured output
+- ✅ Conversation summary generation from template
+- ✅ Incremental file persistence (template, scenarios, conversation)
+- ✅ Streamlit UI with session management and sidebar
+- ✅ Phase transition timing (extract before → respond → transition after)
+- ✅ LLM thinking process filtering (regex cleaning)
+- ✅ Scenario display with IDs in sidebar
+
+**Known Issues:**
+- ⚠️ Double message rendering in UI (messages appear grayed out briefly before disappearing)
+
 **Next Steps:**
-- Implement scenario ingestion script (Gemini Embedding 001)
-- Build conversation manager with phase transition logic
-- Develop conversation summary generation
-- Implement incremental file persistence
-- Create UI components (model selector, scenario display)
-- Test with sample conversations
+- Fix double message rendering issue
+- Testing with real OT trainees
+- Evaluation protocol
 
 ---
 
