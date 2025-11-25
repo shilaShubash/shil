@@ -185,17 +185,6 @@ class ConversationManager:
         Uses LangChain's with_structured_output to reliably extract fields.
         """
         try:
-            # Build extraction prompt with recent conversation context
-            extraction_prompt = """Extract all mentioned information from the conversation so far.
-Only include fields that were explicitly stated or clearly implied.
-
-Important:
-- marital_status/family structure can be inferred from parent information (e.g., "father died" = single parent/widowed)
-- diagnosis can include functional descriptions, not just formal diagnoses
-- cultural_background includes ethnicity, religion, and origin
-
-Leave fields as null if not mentioned."""
-
             # Get all user/assistant messages (exclude system prompts)
             conversation_msgs = [
                 msg for msg in self.messages
@@ -204,7 +193,7 @@ Leave fields as null if not mentioned."""
 
             # Invoke extraction model with full conversation context
             extraction_messages = [
-                SystemMessage(content=extraction_prompt)
+                SystemMessage(content=TEMPLATE_EXTRACTION_PROMPT)
             ] + conversation_msgs
 
             extracted: TemplateExtraction = self.extraction_model.invoke(extraction_messages)

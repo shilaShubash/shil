@@ -224,6 +224,17 @@ You will receive relevant scenario examples for reference. Use them to:
 """
 
 
+TEMPLATE_EXTRACTION_PROMPT = """Extract all mentioned information from the conversation so far.
+Only include fields that were explicitly stated or clearly implied.
+
+Important:
+- marital_status/family structure can be inferred from parent information (e.g., "father died" = single parent/widowed)
+- diagnosis can include functional descriptions, not just formal diagnoses
+- cultural_background includes ethnicity, religion, and origin
+
+Leave fields as null if not mentioned."""
+
+
 def create_scenario_context_message(scenarios: list[dict]) -> str:
     """
     Create the system message containing retrieved scenarios.
