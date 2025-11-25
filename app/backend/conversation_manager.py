@@ -147,24 +147,16 @@ class ConversationManager:
         # Add user message
         self.messages.append(HumanMessage(content=user_message))
 
-        # Get AI response
-        ai_response = self.model.invoke(self.messages)
-        self.messages.append(AIMessage(content=ai_response.content))
-
-        # Check for phase transition (only in INTAKE phase)
-        phase_changed = False
+        # Extract template fields and check for transition if in INTAKE (before LLM responds)
         scenarios = None
-
         if self.phase == "INTAKE":
-            # Extract template fields from conversation using LLM
             self._extract_template_fields()
 
-            # Check if context is sufficient
-            should_transition, status_msg = evaluate_context(self.template)
+            # Check if context is now sufficient
+            status = evaluate_context(self.template)
 
-            if should_transition:
-                # Perform phase transition
-                phase_changed = True
+            if status["phase"] == "MENTORING":
+                # Perform phase transition for NEXT interaction
                 scenarios = self._execute_phase_transition()
 
         # Save conversation
