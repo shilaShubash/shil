@@ -98,7 +98,7 @@ class Template:
         return self.get_filled_count() - self.get_critical_filled_count()
 
 
-def evaluate_context(template: Template) -> tuple[bool, str]:
+def evaluate_context(template: Template) -> Dict[str, Any]:
     """
     Context Evaluator: Check if template is sufficiently complete for phase transition.
 
@@ -109,46 +109,33 @@ def evaluate_context(template: Template) -> tuple[bool, str]:
         template: The current template state
 
     Returns:
-        Tuple of (should_transition: bool, status_message: str)
+        Dict with:
+        - phase: "INTAKE" or "MENTORING"
+        - filled: Total fields filled
+        - filled_critical: Critical fields filled
+        - total: Total fields count
+        - total_critical: Total critical fields count
     """
-    total_fields = len(TEMPLATE_FIELDS)
-    filled_count = template.get_filled_count()
-    critical_filled = template.get_critical_filled_count()
-    additional_filled = template.get_additional_filled_count()
+    total = len(TEMPLATE_FIELDS)
+    filled = template.get_filled_count()
+    filled_critical = template.get_critical_filled_count()
     total_critical = len(CRITICAL_FIELDS)
 
     # Check transition criteria
-    all_critical_filled = critical_filled == total_critical
-    enough_additional = additional_filled >= 7
-    min_total_met = filled_count >= 12
+    all_critical_filled = filled_critical == total_critical
+    enough_additional = (filled - filled_critical) >= 7
 
-    should_transition = all_critical_filled and enough_additional and min_total_met
+    should_transition = all_critical_filled and enough_additional
 
-    # Generate status message
-    if should_transition:
-        status_msg = (
-            f"✓ Context complete: {filled_count}/{total_fields} fields filled "
-            f"({critical_filled}/{total_critical} critical, {additional_filled} additional). "
-            "Ready for scenario retrieval."
-        )
-    else:
-        missing = []
-        if not all_critical_filled:
-            missing.append(
-                f"{total_critical - critical_filled} critical field(s)"
-            )
-        if not enough_additional:
-            missing.append(
-                f"need {7 - additional_filled} more additional field(s)"
-            )
+    phase = "MENTORING" if should_transition else "INTAKE"
 
-        status_msg = (
-            f"Context gathering: {filled_count}/{total_fields} fields filled "
-            f"({critical_filled}/{total_critical} critical, {additional_filled} additional). "
-            f"Missing: {', '.join(missing)}."
-        )
-
-    return should_transition, status_msg
+    return {
+        "phase": phase,
+        "filled": filled,
+        "filled_critical": filled_critical,
+        "total": total,
+        "total_critical": total_critical
+    }
 
 
 def generate_conversation_summary(template: Template) -> str:

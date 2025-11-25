@@ -171,7 +171,7 @@ class ConversationManager:
         self._save_state()
 
         return {
-            "response": ai_response.content,
+            "response": clean_content,
             "phase": self.phase,
             "phase_changed": phase_changed,
             "scenarios": scenarios,
@@ -255,12 +255,11 @@ class ConversationManager:
             setattr(self.template, field, value)
             self.session_manager.save_template(self.template)
 
-            should_transition, status_msg = evaluate_context(self.template)
+            status = evaluate_context(self.template)
 
             return {
                 "success": True,
-                "should_transition": should_transition,
-                "status_message": status_msg
+                "status": status
             }
 
         return {
@@ -296,23 +295,6 @@ class ConversationManager:
 
         # Save template
         self.session_manager.save_template(self.template)
-
-    def _get_template_status(self) -> Dict[str, Any]:
-        """
-        Get current template completion status.
-
-        Returns:
-            Dictionary with template statistics
-        """
-        should_transition, status_msg = evaluate_context(self.template)
-
-        return {
-            "filled_count": self.template.get_filled_count(),
-            "critical_filled": self.template.get_critical_filled_count(),
-            "additional_filled": self.template.get_additional_filled_count(),
-            "should_transition": should_transition,
-            "status_message": status_msg
-        }
 
     def get_session_id(self) -> str:
         """Get the current session ID."""
