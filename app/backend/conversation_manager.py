@@ -16,7 +16,7 @@ from backend.prompts import (
     BASE_SYSTEM_PROMPT,
     PHASE_1_INSTRUCTIONS,
     PHASE_2_INSTRUCTIONS,
-    SCENARIO_USAGE_INSTRUCTIONS,
+    TEMPLATE_EXTRACTION_PROMPT,
     create_scenario_context_message
 )
 from backend.tools import (
@@ -241,7 +241,6 @@ Leave fields as null if not mentioned."""
         self.messages.append(
             SystemMessage(content=create_scenario_context_message(scenarios))
         )
-        self.messages.append(SystemMessage(content=SCENARIO_USAGE_INSTRUCTIONS))
 
         # Update phase
         self.phase = "MENTORING"
