@@ -159,16 +159,46 @@ class ConversationManager:
                 # Perform phase transition for NEXT interaction
                 scenarios = self._execute_phase_transition()
 
+        # Generate response in current phase
+        ai_response = self.model.invoke(self.messages)
+
+        # Clean response content (remove thinking blocks if present)
+        clean_content = self._clean_response(ai_response.content)
+
+        # Add AI response (with cleaned content)
+        self.messages.append(AIMessage(content=clean_content))
+
         # Save conversation
         self._save_state()
 
         return {
             "response": clean_content,
             "phase": self.phase,
-            "phase_changed": phase_changed,
-            "scenarios": scenarios,
-            "template_status": self._get_template_status()
+            "scenarios": scenarios
         }
+
+    def _clean_response(self, content: str) -> str:
+        """
+        Clean LLM response by removing thinking blocks and other unwanted patterns.
+
+        Args:
+            content: Raw LLM response content
+
+        Returns:
+            Cleaned content
+        """
+        import re
+
+        # Remove thinking blocks (pattern: "(Thinking Process: ... )")
+        content = re.sub(r'\(Thinking Process:.*?\)', '', content, flags=re.DOTALL)
+
+        # Remove thinking blocks with other markers
+        content = re.sub(r'\(Internal thoughts?:.*?\)', '', content, flags=re.DOTALL | re.IGNORECASE)
+
+        # Strip extra whitespace
+        content = content.strip()
+
+        return content
 
     def _extract_template_fields(self) -> None:
         """
